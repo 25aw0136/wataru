@@ -2,14 +2,23 @@ import { GlassView } from 'expo-glass-effect';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useCallback, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View, type ImageSourcePropType } from 'react-native';
+import { useCallback, useRef, useState } from 'react';
+import {
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  useColorScheme,
+  View,
+  type ImageSourcePropType,
+} from 'react-native';
 import Animated, {
   Easing,
   useAnimatedProps,
   useAnimatedStyle,
   useFrameCallback,
   useSharedValue,
+  withDelay,
   withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
@@ -23,6 +32,7 @@ import Svg, {
 } from 'react-native-svg';
 
 const sunImage = require('@/assets/figma/sun.png') as ImageSourcePropType;
+const moonImage = require('@/assets/figma/night-moon.png') as ImageSourcePropType;
 
 const FIGMA_WIDTH = 402;
 const FIGMA_HEIGHT = 874;
@@ -68,11 +78,13 @@ function buildWavePath(phase: number, departureMode: number, baseY: number) {
 function AnimatedWaveGraphic({
   breezePhase,
   departurePhase,
+  isNightMode,
   surge,
   ...props
 }: SvgProps & {
   breezePhase: SharedValue<number>;
   departurePhase: SharedValue<number>;
+  isNightMode: boolean;
   surge: SharedValue<number>;
 }) {
   const animatedProps = useAnimatedProps(() => {
@@ -88,18 +100,44 @@ function AnimatedWaveGraphic({
     <Svg viewBox="0 0 402 512" fill="none" preserveAspectRatio="none" {...props}>
       <AnimatedPath animatedProps={animatedProps} fill="url(#waveGradient)" />
       <Defs>
-        <SvgLinearGradient
-          id="waveGradient"
-          x1="201"
-          y1="15.7025"
-          x2="201"
-          y2="512"
-          gradientUnits="userSpaceOnUse">
-          <Stop stopColor="#0090EB" />
-          <Stop offset="0.3" stopColor="#48B1F4" />
-          <Stop offset="1" stopColor="#A5DCFF" />
-        </SvgLinearGradient>
+        {isNightMode ? (
+          <SvgLinearGradient
+            id="waveGradient"
+            x1="201"
+            y1="15.7025"
+            x2="201"
+            y2="512"
+            gradientUnits="userSpaceOnUse">
+            <Stop offset="0.331731" stopColor="#060028" />
+            <Stop offset="0.5625" stopColor="#31005E" />
+            <Stop offset="0.778846" stopColor="#2E348F" />
+            <Stop offset="1" stopColor="#2B63BB" />
+          </SvgLinearGradient>
+        ) : (
+          <SvgLinearGradient
+            id="waveGradient"
+            x1="201"
+            y1="15.7025"
+            x2="201"
+            y2="512"
+            gradientUnits="userSpaceOnUse">
+            <Stop stopColor="#0090EB" />
+            <Stop offset="0.3" stopColor="#48B1F4" />
+            <Stop offset="1" stopColor="#A5DCFF" />
+          </SvgLinearGradient>
+        )}
       </Defs>
+    </Svg>
+  );
+}
+
+function StarGraphic(props: SvgProps) {
+  return (
+    <Svg viewBox="0 0 17.7228 16.9541" fill="none" preserveAspectRatio="none" {...props}>
+      <Path
+        d="M7.91033 0.690983C8.20968 -0.230328 9.51309 -0.230328 9.81244 0.690983L11.2188 5.01925C11.3527 5.43128 11.7366 5.71024 12.1698 5.71024H16.7209C17.6896 5.71024 18.0923 6.94985 17.3086 7.51925L13.6268 10.1943C13.2763 10.4489 13.1296 10.9003 13.2635 11.3123L14.6699 15.6406C14.9692 16.5619 13.9147 17.328 13.131 16.7586L9.44917 14.0836C9.09868 13.8289 8.62409 13.8289 8.2736 14.0836L4.59175 16.7586C3.80804 17.328 2.75356 16.5619 3.05291 15.6406L4.45925 11.3123C4.59312 10.9003 4.44647 10.4489 4.09598 10.1943L0.414132 7.51925C-0.369582 6.94985 0.033193 5.71024 1.00192 5.71024H5.55293C5.98616 5.71024 6.37011 5.43128 6.50399 5.01925L7.91033 0.690983Z"
+        fill="#FFFE8B"
+      />
     </Svg>
   );
 }
@@ -181,10 +219,18 @@ function SideNoteGraphic(props: SvgProps) {
 }
 
 export default function HomeScreen() {
+  const colorScheme = useColorScheme();
   const [isSailing, setIsSailing] = useState(false);
+  const [manualNightMode, setManualNightMode] = useState<boolean | null>(null);
+  const themeTapCount = useRef(0);
+  const lastThemeTapAt = useRef(0);
+  const systemNightMode = colorScheme === 'dark';
+  const isNightMode = manualNightMode ?? systemNightMode;
   const breezePhase = useSharedValue(0);
   const departurePhase = useSharedValue(0);
   const shipMotion = useSharedValue(0);
+  const noteVisibility = useSharedValue(0);
+  const statusVisibility = useSharedValue(0);
   const surge = useSharedValue(0);
 
   useFrameCallback((frame) => {
@@ -225,8 +271,54 @@ export default function HomeScreen() {
     };
   });
 
+  const sideNoteAnimatedStyle = useAnimatedStyle(() => {
+    const visible = noteVisibility.value;
+    const sway = Math.sin(shipMotion.value * 1.25 + 0.4) * 3.2 * visible;
+
+    return {
+      opacity: visible,
+      transform: [
+        { translateY: (1 - visible) * 12 },
+        { translateX: Math.sin(shipMotion.value * 0.72) * 1.4 * visible },
+        { rotate: `${12.31 + sway}deg` },
+      ],
+    };
+  });
+
+  const musicNoteAnimatedStyle = useAnimatedStyle(() => {
+    const visible = noteVisibility.value;
+    const sway = Math.sin(shipMotion.value * 1.45 + 1.1) * 4.2 * visible;
+
+    return {
+      opacity: visible,
+      transform: [
+        { translateY: (1 - visible) * 12 },
+        { translateX: Math.sin(shipMotion.value * 0.86 + 0.7) * 1.2 * visible },
+        { rotate: `${-6.83 + sway}deg` },
+      ],
+    };
+  });
+
+  const statusAnimatedStyle = useAnimatedStyle(() => {
+    const visible = statusVisibility.value;
+
+    return {
+      opacity: visible,
+      transform: [{ translateY: (1 - visible) * 12 }],
+    };
+  });
+
   const toggleSailingMode = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+
+    const now = Date.now();
+    themeTapCount.current = now - lastThemeTapAt.current > 500 ? 1 : themeTapCount.current + 1;
+    lastThemeTapAt.current = now;
+
+    if (themeTapCount.current >= 5) {
+      themeTapCount.current = 0;
+      setManualNightMode((current) => !(current ?? systemNightMode));
+    }
 
     setIsSailing((current) => {
       const next = !current;
@@ -235,46 +327,90 @@ export default function HomeScreen() {
         duration: 1800,
         easing: Easing.inOut(Easing.cubic),
       });
+      noteVisibility.value = withTiming(next ? 1 : 0, {
+        duration: next ? 650 : 260,
+        easing: Easing.out(Easing.cubic),
+      });
+      statusVisibility.value = next
+        ? withDelay(
+            120,
+            withTiming(1, {
+              duration: 820,
+              easing: Easing.out(Easing.cubic),
+            })
+          )
+        : withTiming(0, {
+            duration: 220,
+            easing: Easing.out(Easing.cubic),
+          });
 
       return next;
     });
-  }, [surge]);
+  }, [noteVisibility, statusVisibility, surge, systemNightMode]);
 
   return (
     <LinearGradient
-      colors={['#0090eb', '#48b1f4', '#a5dcff']}
-      locations={[0, 0.3, 1]}
+      colors={
+        isNightMode
+          ? ['#060028', '#31005E', '#2C56AF', '#0090EB']
+          : ['#0090eb', '#48b1f4', '#a5dcff']
+      }
+      locations={isNightMode ? [0, 0.5, 0.84, 1] : [0, 0.3, 1]}
       style={styles.screen}>
       <View style={styles.stage}>
         <GlassView
           glassEffectStyle="regular"
           tintColor="rgba(217, 217, 217, 0.2)"
-          style={styles.topAction}>
+          style={[styles.topAction, isNightMode && styles.nightGlassShadow]}>
           <DiplomaGraphic style={styles.diplomaIcon} />
         </GlassView>
-        <Image contentFit="fill" source={sunImage} style={styles.sun} />
-        <BirdSmallGraphic style={styles.leftSmallBird} />
-        <BirdSmallGraphic style={styles.rightSmallBird} />
-        <BirdLargeGraphic style={styles.leftLargeBird} />
+        {isNightMode ? (
+          <>
+            <Image contentFit="contain" source={moonImage} style={styles.moon} />
+            <StarGraphic style={styles.starOne} />
+            <StarGraphic style={styles.starTwo} />
+            <StarGraphic style={styles.starThree} />
+            <StarGraphic style={styles.starFour} />
+            <StarGraphic style={styles.starFive} />
+            <StarGraphic style={styles.starSix} />
+            <StarGraphic style={styles.starSeven} />
+          </>
+        ) : (
+          <>
+            <Image contentFit="fill" source={sunImage} style={styles.sun} />
+            <BirdSmallGraphic style={styles.leftSmallBird} />
+            <BirdSmallGraphic style={styles.rightSmallBird} />
+            <BirdLargeGraphic style={styles.leftLargeBird} />
+          </>
+        )}
         <Animated.View style={[styles.ship, shipAnimatedStyle]}>
           <ShipGraphic style={styles.shipGraphic} />
         </Animated.View>
         <AnimatedWaveGraphic
           breezePhase={breezePhase}
           departurePhase={departurePhase}
+          isNightMode={isNightMode}
           surge={surge}
           style={styles.wave}
         />
-        <SideNoteGraphic style={styles.sideNote} />
-        <MusicNoteGraphic style={styles.musicNote} />
+        <Animated.View style={[styles.sideNote, sideNoteAnimatedStyle]}>
+          <SideNoteGraphic style={styles.noteGraphic} />
+        </Animated.View>
+        <Animated.View style={[styles.musicNote, musicNoteAnimatedStyle]}>
+          <MusicNoteGraphic style={styles.noteGraphic} />
+        </Animated.View>
 
-        <Text style={styles.statusText}>航海中</Text>
+        <Animated.Text style={[styles.statusText, statusAnimatedStyle]}>航海中</Animated.Text>
 
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={isSailing ? '入港する' : '出航する'}
           onPress={toggleSailingMode}
-          style={({ pressed }) => [styles.buttonHitArea, pressed && styles.buttonPressed]}>
+          style={({ pressed }) => [
+            styles.buttonHitArea,
+            isNightMode && styles.nightGlassShadow,
+            pressed && styles.buttonPressed,
+          ]}>
           <GlassView
             glassEffectStyle="regular"
             tintColor="rgba(217, 217, 217, 0.2)"
@@ -314,6 +450,9 @@ const styles = StyleSheet.create({
     width: 60,
     zIndex: 3,
   },
+  nightGlassShadow: {
+    shadowColor: '#002b47',
+  },
   diplomaIcon: {
     height: 35,
     width: 35,
@@ -350,6 +489,77 @@ const styles = StyleSheet.create({
     width: 31,
     zIndex: 2,
   },
+  moon: {
+    height: 30,
+    left: 333,
+    position: 'absolute',
+    top: 193,
+    transform: [{ rotate: '163.8deg' }, { scaleY: -1 }],
+    width: 30,
+    zIndex: 2,
+  },
+  starOne: {
+    height: 20,
+    left: 51,
+    position: 'absolute',
+    top: 86,
+    transform: [{ rotate: '-6.78deg' }],
+    width: 20,
+    zIndex: 2,
+  },
+  starTwo: {
+    height: 18,
+    left: 93,
+    position: 'absolute',
+    top: 163,
+    transform: [{ rotate: '14.7deg' }],
+    width: 18,
+    zIndex: 2,
+  },
+  starThree: {
+    height: 16,
+    left: 218,
+    position: 'absolute',
+    top: 74,
+    transform: [{ rotate: '-7.75deg' }],
+    width: 16,
+    zIndex: 2,
+  },
+  starFour: {
+    height: 23,
+    left: 22,
+    position: 'absolute',
+    top: 240,
+    transform: [{ rotate: '18.83deg' }],
+    width: 23,
+    zIndex: 2,
+  },
+  starFive: {
+    height: 23,
+    left: 46,
+    position: 'absolute',
+    top: 337,
+    transform: [{ rotate: '18.83deg' }],
+    width: 23,
+    zIndex: 2,
+  },
+  starSix: {
+    height: 20,
+    left: 325,
+    position: 'absolute',
+    top: 315,
+    transform: [{ rotate: '18.83deg' }],
+    width: 20,
+    zIndex: 2,
+  },
+  starSeven: {
+    height: 16,
+    left: 218,
+    position: 'absolute',
+    top: 239,
+    width: 16,
+    zIndex: 2,
+  },
   ship: {
     height: 110,
     left: 132,
@@ -376,7 +586,6 @@ const styles = StyleSheet.create({
     left: 302,
     position: 'absolute',
     top: 451,
-    transform: [{ rotate: '12.31deg' }],
     width: 20,
     zIndex: 2,
   },
@@ -385,9 +594,12 @@ const styles = StyleSheet.create({
     left: 83,
     position: 'absolute',
     top: 510,
-    transform: [{ rotate: '-6.83deg' }],
     width: 18,
     zIndex: 2,
+  },
+  noteGraphic: {
+    height: '100%',
+    width: '100%',
   },
   statusText: {
     color: '#ffffff',
