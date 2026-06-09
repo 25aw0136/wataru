@@ -1,0 +1,3 @@
+Migration report:
+  check_before_using: Plugin expo@claude-plugins-official - Added project Codex marketplace entry for cached Expo plugin.
+  skipped: AGENTS.md - Preserved existing Codex instructions; migrator dry-run would link AGENTS.md to CLAUDE.md, but CLAUDE.md points back to AGENTS.md.
