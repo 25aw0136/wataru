@@ -2,7 +2,7 @@ import { GlassView } from 'expo-glass-effect';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   Platform,
   Pressable,
@@ -11,6 +11,7 @@ import {
   useColorScheme,
   View,
   type ImageSourcePropType,
+  type LayoutChangeEvent,
 } from 'react-native';
 import Animated, {
   Easing,
@@ -221,17 +222,22 @@ function SideNoteGraphic(props: SvgProps) {
 export default function HomeScreen() {
   const colorScheme = useColorScheme();
   const [isSailing, setIsSailing] = useState(false);
-  const [manualNightMode, setManualNightMode] = useState<boolean | null>(null);
-  const themeTapCount = useRef(0);
-  const lastThemeTapAt = useRef(0);
-  const systemNightMode = colorScheme === 'dark';
-  const isNightMode = manualNightMode ?? systemNightMode;
+  const [stageSize, setStageSize] = useState({ height: FIGMA_HEIGHT, width: FIGMA_WIDTH });
+  const isNightMode = colorScheme === 'dark';
   const breezePhase = useSharedValue(0);
   const departurePhase = useSharedValue(0);
   const shipMotion = useSharedValue(0);
   const noteVisibility = useSharedValue(0);
   const statusVisibility = useSharedValue(0);
   const surge = useSharedValue(0);
+
+  const handleStageLayout = useCallback((event: LayoutChangeEvent) => {
+    const { height, width } = event.nativeEvent.layout;
+
+    setStageSize((current) =>
+      current.height === height && current.width === width ? current : { height, width }
+    );
+  }, []);
 
   useFrameCallback((frame) => {
     const elapsed = frame.timeSincePreviousFrame ?? 16.67;
@@ -311,15 +317,6 @@ export default function HomeScreen() {
   const toggleSailingMode = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
-    const now = Date.now();
-    themeTapCount.current = now - lastThemeTapAt.current > 500 ? 1 : themeTapCount.current + 1;
-    lastThemeTapAt.current = now;
-
-    if (themeTapCount.current >= 5) {
-      themeTapCount.current = 0;
-      setManualNightMode((current) => !(current ?? systemNightMode));
-    }
-
     setIsSailing((current) => {
       const next = !current;
 
@@ -346,7 +343,7 @@ export default function HomeScreen() {
 
       return next;
     });
-  }, [noteVisibility, statusVisibility, surge, systemNightMode]);
+  }, [noteVisibility, statusVisibility, surge]);
 
   return (
     <LinearGradient
@@ -357,68 +354,79 @@ export default function HomeScreen() {
       }
       locations={isNightMode ? [0, 0.5, 0.84, 1] : [0, 0.3, 1]}
       style={styles.screen}>
-      <View style={styles.stage}>
-        <GlassView
-          glassEffectStyle="regular"
-          tintColor="rgba(217, 217, 217, 0.2)"
-          style={[styles.topAction, isNightMode && styles.nightGlassShadow]}>
-          <DiplomaGraphic style={styles.diplomaIcon} />
-        </GlassView>
-        {isNightMode ? (
-          <>
-            <Image contentFit="contain" source={moonImage} style={styles.moon} />
-            <StarGraphic style={styles.starOne} />
-            <StarGraphic style={styles.starTwo} />
-            <StarGraphic style={styles.starThree} />
-            <StarGraphic style={styles.starFour} />
-            <StarGraphic style={styles.starFive} />
-            <StarGraphic style={styles.starSix} />
-            <StarGraphic style={styles.starSeven} />
-          </>
-        ) : (
-          <>
-            <Image contentFit="fill" source={sunImage} style={styles.sun} />
-            <BirdSmallGraphic style={styles.leftSmallBird} />
-            <BirdSmallGraphic style={styles.rightSmallBird} />
-            <BirdLargeGraphic style={styles.leftLargeBird} />
-          </>
-        )}
-        <Animated.View style={[styles.ship, shipAnimatedStyle]}>
-          <ShipGraphic style={styles.shipGraphic} />
-        </Animated.View>
-        <AnimatedWaveGraphic
-          breezePhase={breezePhase}
-          departurePhase={departurePhase}
-          isNightMode={isNightMode}
-          surge={surge}
-          style={styles.wave}
-        />
-        <Animated.View style={[styles.sideNote, sideNoteAnimatedStyle]}>
-          <SideNoteGraphic style={styles.noteGraphic} />
-        </Animated.View>
-        <Animated.View style={[styles.musicNote, musicNoteAnimatedStyle]}>
-          <MusicNoteGraphic style={styles.noteGraphic} />
-        </Animated.View>
-
-        <Animated.Text style={[styles.statusText, statusAnimatedStyle]}>航海中</Animated.Text>
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={isSailing ? '入港する' : '出航する'}
-          onPress={toggleSailingMode}
-          style={({ pressed }) => [
-            styles.buttonHitArea,
-            isNightMode && styles.nightGlassShadow,
-            pressed && styles.buttonPressed,
+      <View onLayout={handleStageLayout} style={styles.stage}>
+        <View
+          style={[
+            styles.designCanvas,
+            {
+              transform: [
+                { scaleX: stageSize.width / FIGMA_WIDTH },
+                { scaleY: stageSize.height / FIGMA_HEIGHT },
+              ],
+            },
           ]}>
           <GlassView
             glassEffectStyle="regular"
             tintColor="rgba(217, 217, 217, 0.2)"
-            isInteractive
-            style={styles.glassButton}>
-            <Text style={styles.buttonText}>{isSailing ? '入港する' : '出航する'}</Text>
+            style={[styles.topAction, isNightMode && styles.nightGlassShadow]}>
+            <DiplomaGraphic style={styles.diplomaIcon} />
           </GlassView>
-        </Pressable>
+          {isNightMode ? (
+            <>
+              <Image contentFit="contain" source={moonImage} style={styles.moon} />
+              <StarGraphic style={styles.starOne} />
+              <StarGraphic style={styles.starTwo} />
+              <StarGraphic style={styles.starThree} />
+              <StarGraphic style={styles.starFour} />
+              <StarGraphic style={styles.starFive} />
+              <StarGraphic style={styles.starSix} />
+              <StarGraphic style={styles.starSeven} />
+            </>
+          ) : (
+            <>
+              <Image contentFit="fill" source={sunImage} style={styles.sun} />
+              <BirdSmallGraphic style={styles.leftSmallBird} />
+              <BirdSmallGraphic style={styles.rightSmallBird} />
+              <BirdLargeGraphic style={styles.leftLargeBird} />
+            </>
+          )}
+          <Animated.View style={[styles.ship, shipAnimatedStyle]}>
+            <ShipGraphic style={styles.shipGraphic} />
+          </Animated.View>
+          <AnimatedWaveGraphic
+            breezePhase={breezePhase}
+            departurePhase={departurePhase}
+            isNightMode={isNightMode}
+            surge={surge}
+            style={styles.wave}
+          />
+          <Animated.View style={[styles.sideNote, sideNoteAnimatedStyle]}>
+            <SideNoteGraphic style={styles.noteGraphic} />
+          </Animated.View>
+          <Animated.View style={[styles.musicNote, musicNoteAnimatedStyle]}>
+            <MusicNoteGraphic style={styles.noteGraphic} />
+          </Animated.View>
+
+          <Animated.Text style={[styles.statusText, statusAnimatedStyle]}>航海中</Animated.Text>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={isSailing ? '入港する' : '出航する'}
+            onPress={toggleSailingMode}
+            style={({ pressed }) => [
+              styles.buttonHitArea,
+              isNightMode && styles.nightGlassShadow,
+              pressed && styles.buttonPressed,
+            ]}>
+            <GlassView
+              glassEffectStyle="regular"
+              tintColor="rgba(217, 217, 217, 0.2)"
+              isInteractive
+              style={styles.glassButton}>
+              <Text style={styles.buttonText}>{isSailing ? '入港する' : '出航する'}</Text>
+            </GlassView>
+          </Pressable>
+        </View>
       </View>
     </LinearGradient>
   );
@@ -430,9 +438,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#48b1f4',
   },
   stage: {
+    alignItems: 'center',
     flex: 1,
+    justifyContent: 'center',
     overflow: 'hidden',
     position: 'relative',
+  },
+  designCanvas: {
+    height: FIGMA_HEIGHT,
+    position: 'relative',
+    width: FIGMA_WIDTH,
   },
   topAction: {
     alignItems: 'center',
@@ -459,9 +474,9 @@ const styles = StyleSheet.create({
   },
   sun: {
     height: 30,
-    left: `${(40 / FIGMA_WIDTH) * 100}%`,
+    left: 40,
     position: 'absolute',
-    top: `${(174 / FIGMA_HEIGHT) * 100}%`,
+    top: 174,
     width: 30,
     zIndex: 2,
   },
@@ -562,9 +577,9 @@ const styles = StyleSheet.create({
   },
   ship: {
     height: 110,
-    left: 132,
+    left: 140,
     position: 'absolute',
-    top: 275,
+    top: 287,
     width: 119,
     zIndex: 1,
   },
@@ -574,10 +589,10 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   wave: {
-    height: '58.6%',
+    bottom: -1,
     left: 0,
     position: 'absolute',
-    top: `${(350 / FIGMA_HEIGHT) * 100}%`,
+    top: 350,
     width: '100%',
     zIndex: 2,
   },
@@ -611,7 +626,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 0,
     textAlign: 'center',
-    top: `${(465 / FIGMA_HEIGHT) * 100}%`,
+    top: 465,
     zIndex: 2,
   },
   buttonHitArea: {
@@ -645,7 +660,7 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontFamily: Platform.select({ ios: 'Noto Sans', default: 'System' }),
     fontSize: 22,
-    fontWeight: '300',
+    fontWeight: '600',
     lineHeight: 30,
     textAlign: 'center',
   },
