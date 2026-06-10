@@ -2,6 +2,7 @@ import { GlassView } from 'expo-glass-effect';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import { router, type Href } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
   Platform,
@@ -365,12 +366,18 @@ export default function HomeScreen() {
               ],
             },
           ]}>
-          <GlassView
-            glassEffectStyle="regular"
-            tintColor="rgba(217, 217, 217, 0.2)"
-            style={[styles.topAction, isNightMode && styles.nightGlassShadow]}>
-            <DiplomaGraphic style={styles.diplomaIcon} />
-          </GlassView>
+          <Pressable
+            accessibilityLabel="島のコレクションを開く"
+            accessibilityRole="button"
+            onPress={() => router.push('/collection' as Href)}
+            style={({ pressed }) => [styles.topActionHitArea, pressed && styles.buttonPressed]}>
+            <GlassView
+              glassEffectStyle="regular"
+              tintColor="rgba(217, 217, 217, 0.2)"
+              style={[styles.topAction, isNightMode && styles.nightGlassShadow]}>
+              <DiplomaGraphic style={styles.diplomaIcon} />
+            </GlassView>
+          </Pressable>
           {isNightMode ? (
             <>
               <Image contentFit="contain" source={moonImage} style={styles.moon} />
@@ -449,21 +456,25 @@ const styles = StyleSheet.create({
     position: 'relative',
     width: FIGMA_WIDTH,
   },
+  topActionHitArea: {
+    height: 60,
+    left: 302,
+    position: 'absolute',
+    top: 60,
+    width: 60,
+    zIndex: 3,
+  },
   topAction: {
     alignItems: 'center',
     backgroundColor: 'rgba(217, 217, 217, 0.2)',
     borderRadius: 100,
-    height: 60,
+    height: '100%',
     justifyContent: 'center',
-    left: 302,
-    position: 'absolute',
     shadowColor: '#3793cc',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.3,
     shadowRadius: 10,
-    top: 60,
-    width: 60,
-    zIndex: 3,
+    width: '100%',
   },
   nightGlassShadow: {
     shadowColor: '#002b47',
