@@ -1,0 +1,23 @@
+{
+  "name": "wataru-project",
+  "interface": {
+    "displayName": "Wataru project plugins"
+  },
+  "plugins": [
+    {
+      "name": "expo",
+      "source": {
+        "source": "local",
+        "path": "/Users/jiamin/.codex/plugins/cache/claude-plugins-official/expo/1.0.0"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "NONE",
+        "products": [
+          "CODEX"
+        ]
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}
