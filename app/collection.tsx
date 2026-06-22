@@ -1,7 +1,18 @@
+import { useEffect, useRef, useState } from 'react';
+import { BlurView } from 'expo-blur';
 import { GlassView } from 'expo-glass-effect';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import {
+  Animated,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import Svg, { G, Path } from 'react-native-svg';
 
 const FIGMA_WIDTH = 402;
@@ -27,6 +38,65 @@ const islands = [
   { id: 'socotra', image: islandImages.enoshima, name: 'ソコトラ島', rarity: 4 },
   { id: 'aogashima', image: islandImages.aogashima, name: '青ヶ島', rarity: 5 },
 ];
+
+const islandDetails = {
+  enoshima: {
+    discoveredAt: '2026.6.10(14:23)',
+    image: islandImages.enoshima,
+    location: '所在地：日本 沖縄県 石垣市',
+    name: '江ノ島',
+    rarity: 1,
+    trivia:
+      '石垣島はや八重山諸島の中心で、透き通った海\nとマンタの遭遇率で有名。\n島全体が国立公園に指定されており、手付かず\nの自然が残っている。',
+  },
+  miyajima: {
+    discoveredAt: '2026.6.10(14:23)',
+    image: islandImages.miyajima,
+    location: '所在地：日本 広島県',
+    name: '宮島',
+    rarity: 1,
+    trivia:
+      '日本三景のひとつとして知られ、海に浮かぶように見える大鳥居が象徴的。\n島全体が信仰の対象として大切にされている。',
+  },
+  ishigaki: {
+    discoveredAt: '2026.6.10(14:23)',
+    image: islandImages.ishigaki,
+    location: '所在地：日本 沖縄県',
+    name: '石垣島',
+    rarity: 1,
+    trivia:
+      '八重山諸島の中心で、透き通った海とマンタの遭遇率で有名。\n美しいサンゴ礁に囲まれ、多くのダイバーが訪れる。',
+  },
+  yakushima: {
+    discoveredAt: '2026.6.10(14:23)',
+    image: islandImages.yakushima,
+    location: '所在地：日本 鹿児島県',
+    name: '屋久島',
+    rarity: 2,
+    trivia:
+      '樹齢数千年ともいわれる縄文杉が眠る自然豊かな島。\n島の約9割が森林に覆われ、世界自然遺産に登録されている。',
+  },
+  bali: {
+    discoveredAt: '2026.6.10(14:23)',
+    image: islandImages.bali,
+    location: '所在地：インドネシア',
+    name: 'バリ島',
+    rarity: 2,
+    trivia:
+      '「神々の島」と呼ばれ、島内には数多くの寺院が点在する。\n独自の文化や伝統が今も色濃く残る人気のリゾート地。',
+  },
+  aogashima: {
+    discoveredAt: '2026.6.10(14:23)',
+    image: islandImages.aogashima,
+    location: '所在地：日本 東京',
+    name: '青ヶ島',
+    rarity: 5,
+    trivia:
+      '東京都に属しながら、本土から約360km離れた火山島。\n巨大な火山の中にさらに火山がある、珍しい二重カルデラ地形を持つ。',
+  },
+};
+
+type IslandDetailId = keyof typeof islandDetails;
 
 function BackgroundWaves() {
   return (
@@ -83,10 +153,124 @@ function BackIcon({ size }: { size: number }) {
   );
 }
 
+function ShareIcon({ size }: { size: number }) {
+  return (
+    <Svg height={size} viewBox="0 0 80 80" width={size}>
+      <Path
+        d="M54 35.5L43.6 24V29.75C38.4 29.75 28 33.2 28 47C28 45.0828 31.12 41.25 43.6 41.25V47L54 35.5Z"
+        fill="none"
+        stroke="#FFFFFF"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
+    </Svg>
+  );
+}
+
+function CloseIcon({ size }: { size: number }) {
+  return (
+    <Svg height={size} viewBox="0 0 80 80" width={size}>
+      <Path
+        d="M30 30L50 50M30 50L50 30"
+        fill="none"
+        stroke="#FFFFFF"
+        strokeLinecap="round"
+        strokeWidth="4"
+      />
+    </Svg>
+  );
+}
+
 export default function CollectionScreen() {
-  const { width } = useWindowDimensions();
+  const { height, width } = useWindowDimensions();
+  const [isDetailModalMounted, setIsDetailModalMounted] = useState(false);
+  const [selectedIslandId, setSelectedIslandId] = useState<IslandDetailId>('enoshima');
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const detailModalOpacity = useRef(new Animated.Value(0)).current;
+  const detailModalTranslateY = useRef(new Animated.Value(height)).current;
+  const isClosingDetailModal = useRef(false);
   const scale = width / FIGMA_WIDTH;
+  const modalScale = Math.min(scale, (height - 32) / 709);
+  const detailModalHiddenOffset = height;
   const cardWidth = 160 * scale;
+  const selectedIslandDetail = islandDetails[selectedIslandId];
+
+  useEffect(() => {
+    if (!isDetailModalMounted) {
+      return;
+    }
+
+    isClosingDetailModal.current = false;
+    backdropOpacity.setValue(0);
+    detailModalOpacity.setValue(0);
+    detailModalTranslateY.setValue(detailModalHiddenOffset);
+
+    Animated.parallel([
+      Animated.timing(backdropOpacity, {
+        duration: 220,
+        toValue: 1,
+        useNativeDriver: true,
+      }),
+      Animated.timing(detailModalOpacity, {
+        duration: 120,
+        toValue: 1,
+        useNativeDriver: true,
+      }),
+      Animated.spring(detailModalTranslateY, {
+        damping: 24,
+        mass: 0.95,
+        stiffness: 210,
+        toValue: 0,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [
+    backdropOpacity,
+    detailModalOpacity,
+    detailModalHiddenOffset,
+    detailModalTranslateY,
+    isDetailModalMounted,
+  ]);
+
+  const openIslandModal = (islandId: string) => {
+    if (!(islandId in islandDetails)) {
+      return;
+    }
+
+    setSelectedIslandId(islandId as IslandDetailId);
+    setIsDetailModalMounted(true);
+  };
+
+  const closeDetailModal = () => {
+    if (isClosingDetailModal.current) {
+      return;
+    }
+
+    isClosingDetailModal.current = true;
+    Animated.parallel([
+      Animated.timing(backdropOpacity, {
+        duration: 180,
+        toValue: 0,
+        useNativeDriver: true,
+      }),
+      Animated.timing(detailModalOpacity, {
+        duration: 180,
+        toValue: 0,
+        useNativeDriver: true,
+      }),
+      Animated.timing(detailModalTranslateY, {
+        duration: 240,
+        toValue: detailModalHiddenOffset,
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (finished) {
+        setIsDetailModalMounted(false);
+        isClosingDetailModal.current = false;
+      }
+    });
+  };
 
   return (
     <View style={styles.screen}>
@@ -145,7 +329,9 @@ export default function CollectionScreen() {
             accessibilityLabel={`${island.name}、レア度${island.rarity}`}
             accessibilityRole="button"
             key={island.id}
-            onPress={() => {}}
+            onPress={() => {
+              openIslandModal(island.id);
+            }}
             style={({ pressed }) => [
               styles.cardPressable,
               { borderRadius: 36 * scale, height: 200 * scale, width: cardWidth },
@@ -199,6 +385,192 @@ export default function CollectionScreen() {
           </Pressable>
         ))}
       </ScrollView>
+
+      <Modal
+        animationType="none"
+        onRequestClose={closeDetailModal}
+        transparent
+        visible={isDetailModalMounted}>
+        <View style={styles.modalLayer}>
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.modalBackdrop, { opacity: backdropOpacity }]}
+          />
+          <Animated.View
+            style={[
+              styles.detailPanelMotion,
+              {
+                opacity: detailModalOpacity,
+                transform: [{ translateY: detailModalTranslateY }],
+              },
+            ]}>
+            <View
+              style={[
+                styles.detailPanel,
+                {
+                  borderRadius: 50 * modalScale,
+                  height: 709 * modalScale,
+                  width: 370 * modalScale,
+                },
+              ]}>
+              <BlurView
+                intensity={78}
+                style={StyleSheet.absoluteFill}
+                tint="systemUltraThinMaterialDark"
+              />
+              <View style={styles.detailPanelTint} />
+              <Text
+                style={[
+                  styles.detailTitle,
+                  {
+                    fontSize: 44 * modalScale,
+                    left: 33 * modalScale,
+                    lineHeight: 58 * modalScale,
+                    top: 25 * modalScale,
+                  },
+                ]}>
+                {selectedIslandDetail.name}
+              </Text>
+
+              <View
+                style={[
+                  styles.detailRarityRow,
+                  { left: 33 * modalScale, top: 94 * modalScale },
+                ]}>
+                <Text
+                  style={[
+                    styles.detailRarityLabel,
+                    { fontSize: 20 * modalScale, lineHeight: 27 * modalScale },
+                  ]}>
+                  レア度
+                </Text>
+                {Array.from({ length: selectedIslandDetail.rarity }, (_, index) => (
+                  <StarIcon key={index} size={30 * modalScale} />
+                ))}
+              </View>
+
+              <Pressable
+                accessibilityLabel="共有"
+                accessibilityRole="button"
+                onPress={() => {}}
+                style={({ pressed }) => [
+                  styles.detailShareButton,
+                  {
+                    height: 60 * modalScale,
+                    left: 278 * modalScale,
+                    top: 35 * modalScale,
+                    width: 60 * modalScale,
+                  },
+                  pressed && styles.pressed,
+                ]}>
+                <GlassView glassEffectStyle="regular" style={styles.detailRoundButtonGlass}>
+                  <ShareIcon size={60 * modalScale} />
+                </GlassView>
+              </Pressable>
+
+              <Image
+                contentFit="cover"
+                source={selectedIslandDetail.image}
+                style={[
+                  styles.detailImage,
+                  {
+                    borderRadius: 30 * modalScale,
+                    height: 209 * modalScale,
+                    left: 33 * modalScale,
+                    top: 134 * modalScale,
+                    width: 305 * modalScale,
+                  },
+                ]}
+              />
+
+              <Text
+                style={[
+                  styles.detailBodyText,
+                  {
+                    fontSize: 14 * modalScale,
+                    left: 33 * modalScale,
+                    lineHeight: 19 * modalScale,
+                    top: 349 * modalScale,
+                    width: 305 * modalScale,
+                  },
+                ]}>
+                {selectedIslandDetail.location}
+              </Text>
+
+              <Text
+                style={[
+                  styles.detailSectionTitle,
+                  {
+                    fontSize: 20 * modalScale,
+                    left: 33 * modalScale,
+                    lineHeight: 27 * modalScale,
+                    top: 397 * modalScale,
+                  },
+                ]}>
+                豆知識
+              </Text>
+              <Text
+                style={[
+                  styles.detailBodyText,
+                  {
+                    fontSize: 14 * modalScale,
+                    left: 33 * modalScale,
+                    lineHeight: 19 * modalScale,
+                    top: 434 * modalScale,
+                    width: 305 * modalScale,
+                  },
+                ]}>
+                {selectedIslandDetail.trivia}
+              </Text>
+
+              <Text
+                style={[
+                  styles.detailSectionTitle,
+                  {
+                    fontSize: 20 * modalScale,
+                    left: 33 * modalScale,
+                    lineHeight: 27 * modalScale,
+                    top: 534 * modalScale,
+                  },
+                ]}>
+                発見日
+              </Text>
+              <Text
+                style={[
+                  styles.detailBodyText,
+                  {
+                    fontSize: 14 * modalScale,
+                    left: 33 * modalScale,
+                    lineHeight: 19 * modalScale,
+                    top: 570 * modalScale,
+                    width: 305 * modalScale,
+                  },
+                ]}>
+                {selectedIslandDetail.discoveredAt}
+              </Text>
+
+              <Pressable
+                accessibilityLabel="閉じる"
+                accessibilityRole="button"
+                onPress={closeDetailModal}
+                style={({ pressed }) => [
+                  styles.detailCloseButton,
+                  {
+                    height: 60 * modalScale,
+                    left: 155 * modalScale,
+                    top: 619 * modalScale,
+                    width: 60 * modalScale,
+                  },
+                  pressed && styles.pressed,
+                ]}>
+                <GlassView glassEffectStyle="regular" style={styles.detailRoundButtonGlass}>
+                  <CloseIcon size={60 * modalScale} />
+                </GlassView>
+              </Pressable>
+            </View>
+          </Animated.View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -290,5 +662,90 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.82,
     transform: [{ scale: 0.98 }],
+  },
+  modalLayer: {
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+  },
+  detailPanelMotion: {
+    elevation: 20,
+    shadowColor: '#071926',
+    shadowOffset: { height: 18, width: 0 },
+    shadowOpacity: 0.36,
+    shadowRadius: 36,
+  },
+  detailPanel: {
+    backgroundColor: 'rgba(86, 139, 178, 0.10)',
+    overflow: 'hidden',
+    position: 'relative',
+    shadowColor: '#206B99',
+    shadowOffset: { height: 3, width: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+  },
+  detailPanelTint: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(117, 151, 174, 0.1)',
+  },
+  detailTitle: {
+    color: '#FFFFFF',
+    fontFamily: 'Yuanti SC',
+    fontWeight: '700',
+    position: 'absolute',
+  },
+  detailRarityRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 4,
+    position: 'absolute',
+  },
+  detailRarityLabel: {
+    color: '#FFFFFF',
+    fontFamily: 'Yuanti SC',
+    fontWeight: '400',
+  },
+  detailShareButton: {
+    borderRadius: 100,
+    position: 'absolute',
+    shadowColor: '#3793CC',
+    shadowOffset: { height: 3, width: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+  },
+  detailRoundButtonGlass: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(217, 217, 217, 0.2)',
+    borderRadius: 100,
+    height: '100%',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  detailImage: {
+    position: 'absolute',
+  },
+  detailBodyText: {
+    color: '#FFFFFF',
+    fontFamily: 'Yuanti SC',
+    fontWeight: '400',
+    position: 'absolute',
+  },
+  detailSectionTitle: {
+    color: '#FFFFFF',
+    fontFamily: 'Yuanti SC',
+    fontWeight: '700',
+    position: 'absolute',
+  },
+  detailCloseButton: {
+    borderRadius: 100,
+    position: 'absolute',
+    shadowColor: '#3793CC',
+    shadowOffset: { height: 3, width: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
   },
 });

@@ -354,7 +354,7 @@ export default function HomeScreen() {
           : ['#0090eb', '#48b1f4', '#a5dcff']
       }
       locations={isNightMode ? [0, 0.5, 0.84, 1] : [0, 0.3, 1]}
-      style={styles.screen}>
+      style={[styles.screen, isNightMode && styles.nightScreen]}>
       <View onLayout={handleStageLayout} style={styles.stage}>
         <View
           style={[
@@ -443,6 +443,9 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: '#48b1f4',
+  },
+  nightScreen: {
+    backgroundColor: '#2b63bb',
   },
   stage: {
     alignItems: 'center',
@@ -600,7 +603,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   wave: {
-    bottom: -1,
+    bottom: -24,
     left: 0,
     position: 'absolute',
     top: 350,
