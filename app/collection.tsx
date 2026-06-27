@@ -20,9 +20,13 @@ const FIGMA_WIDTH = 402;
 const islandImages = {
   aogashima: require('@/assets/figma/collection-aogashima.png'),
   bali: require('@/assets/figma/collection-bali.png'),
+  borabora: require('@/assets/figma/collection-borabora.png'),
+  easter: require('@/assets/figma/collection-easter.png'),
   enoshima: require('@/assets/figma/collection-enoshima.png'),
   ishigaki: require('@/assets/figma/collection-ishigaki.png'),
+  komodo: require('@/assets/figma/collection-komodo.png'),
   miyajima: require('@/assets/figma/collection-miyajima.png'),
+  socotra: require('@/assets/figma/collection-socotra.png'),
   yakushima: require('@/assets/figma/collection-yakushima.png'),
 };
 
@@ -32,10 +36,10 @@ const islands = [
   { id: 'ishigaki', image: islandImages.ishigaki, name: '石垣島', rarity: 1 },
   { id: 'yakushima', image: islandImages.yakushima, name: '屋久島', rarity: 2 },
   { id: 'bali', image: islandImages.bali, name: 'バリ島', rarity: 2 },
-  { id: 'borabora', image: islandImages.enoshima, name: 'ボラボラ島', rarity: 3 },
-  { id: 'easter', image: islandImages.enoshima, name: 'イースター島', rarity: 3 },
-  { id: 'komodo', image: islandImages.enoshima, name: 'コモド島', rarity: 3 },
-  { id: 'socotra', image: islandImages.enoshima, name: 'ソコトラ島', rarity: 4 },
+  { id: 'borabora', image: islandImages.borabora, name: 'ボラボラ島', rarity: 3 },
+  { id: 'easter', image: islandImages.easter, name: 'イースター島', rarity: 3 },
+  { id: 'komodo', image: islandImages.komodo, name: 'コモド島', rarity: 3 },
+  { id: 'socotra', image: islandImages.socotra, name: 'ソコトラ島', rarity: 4 },
   { id: 'aogashima', image: islandImages.aogashima, name: '青ヶ島', rarity: 5 },
 ];
 
@@ -84,6 +88,42 @@ const islandDetails = {
     rarity: 2,
     trivia:
       '「神々の島」と呼ばれ、島内には数多くの寺院が点在する。\n独自の文化や伝統が今も色濃く残る人気のリゾート地。',
+  },
+  borabora: {
+    discoveredAt: '2026.6.10(14:23)',
+    image: islandImages.borabora,
+    location: '所在地：フランス領',
+    name: 'ボラボラ島',
+    rarity: 3,
+    trivia:
+      'エメラルド色のラグーンに囲まれた南太平洋の楽園。\n海の上に建つ水上コテージが世界中の憧れとなっている。',
+  },
+  easter: {
+    discoveredAt: '2026.6.10(14:23)',
+    image: islandImages.easter,
+    location: '所在地：チリ共和国',
+    name: 'イースター島',
+    rarity: 3,
+    trivia:
+      '約900体ものモアイ像が点在する神秘的な島。\nその建造方法や目的には、今も多くの謎が残されている。',
+  },
+  komodo: {
+    discoveredAt: '2026.6.10(14:23)',
+    image: islandImages.komodo,
+    location: '所在地：日本 沖縄県 石垣市',
+    name: 'コモド島',
+    rarity: 3,
+    trivia:
+      '世界最大級のトカゲ「コモドドラゴン」が生息する島。\n島全体が国立公園に指定され、貴重な自然が守られている。',
+  },
+  socotra: {
+    discoveredAt: '2026.6.10(14:23)',
+    image: islandImages.socotra,
+    location: '所在地：日本 沖縄県 石垣市',
+    name: 'ソコトラ島',
+    rarity: 4,
+    trivia:
+      '傘を逆さにしたような竜血樹が生えることで知られる島。\n固有種が多く、その独特な景観から「地球最後の秘境」とも呼ばれる。',
   },
   aogashima: {
     discoveredAt: '2026.6.10(14:23)',
@@ -193,7 +233,7 @@ export default function CollectionScreen() {
   const scale = width / FIGMA_WIDTH;
   const modalScale = Math.min(scale, (height - 32) / 709);
   const detailModalHiddenOffset = height;
-  const cardWidth = 160 * scale;
+  const cardWidth = 370 * scale;
   const selectedIslandDetail = islandDetails[selectedIslandId];
 
   useEffect(() => {
@@ -304,7 +344,10 @@ export default function CollectionScreen() {
           },
           pressed && styles.pressed,
         ]}>
-        <GlassView glassEffectStyle="regular" style={styles.backButtonGlass}>
+        <GlassView
+          glassEffectStyle="regular"
+          tintColor="rgba(50, 107, 150, 0.32)"
+          style={styles.backButtonGlass}>
           <View style={{ transform: [{ translateY: -4 * scale }] }}>
             <BackIcon size={36 * scale} />
           </View>
@@ -315,11 +358,10 @@ export default function CollectionScreen() {
         contentContainerStyle={[
           styles.scrollContent,
           {
-            columnGap: 24 * scale,
             paddingBottom: 48 * scale,
-            paddingHorizontal: 29 * scale,
+            paddingHorizontal: 16 * scale,
             paddingTop: 31 * scale,
-            rowGap: 24 * scale,
+            rowGap: 12 * scale,
           },
         ]}
         showsVerticalScrollIndicator={false}
@@ -334,26 +376,26 @@ export default function CollectionScreen() {
             }}
             style={({ pressed }) => [
               styles.cardPressable,
-              { borderRadius: 36 * scale, height: 200 * scale, width: cardWidth },
+              { borderRadius: 24 * scale, height: 95 * scale, width: cardWidth },
               pressed && styles.pressed,
             ]}>
             <GlassView
               glassEffectStyle="regular"
-              style={[styles.card, { borderRadius: 36 * scale }]}>
+              style={[styles.card, { borderRadius: 24 * scale }]}>
               <Text
                 numberOfLines={1}
                 style={[
                   styles.cardTitle,
                   {
                     fontSize: 20 * scale,
-                    left: 16 * scale,
+                    left: 24 * scale,
                     lineHeight: 27 * scale,
-                    top: 16 * scale,
+                    top: 21 * scale,
                   },
                 ]}>
                 {island.name}
               </Text>
-              <View style={[styles.rarityRow, { left: 16 * scale, top: 47 * scale }]}>
+              <View style={[styles.rarityRow, { left: 24 * scale, top: 54 * scale }]}>
                 <Text
                   style={[
                     styles.rarityLabel,
@@ -363,7 +405,11 @@ export default function CollectionScreen() {
                 </Text>
                 <View style={styles.stars}>
                   {Array.from({ length: island.rarity }, (_, index) => (
-                    <StarIcon key={index} size={20 * scale} />
+                    <View
+                      key={index}
+                      style={index > 0 && { marginLeft: -3 * scale }}>
+                      <StarIcon size={16 * scale} />
+                    </View>
                   ))}
                 </View>
               </View>
@@ -373,11 +419,10 @@ export default function CollectionScreen() {
                 style={[
                   styles.cardImage,
                   {
-                    borderRadius: 30 * scale,
-                    bottom: 6 * scale,
-                    height: 117 * scale,
-                    left: 6 * scale,
-                    width: 148 * scale,
+                    height: 95 * scale,
+                    right: 0,
+                    top: 0,
+                    width: 215 * scale,
                   },
                 ]}
               />
@@ -606,8 +651,10 @@ const styles = StyleSheet.create({
   },
   backButtonGlass: {
     alignItems: 'center',
-    backgroundColor: 'rgba(217, 217, 217, 0.2)',
+    backgroundColor: 'rgba(50, 107, 150, 0.24)',
+    borderColor: 'rgba(255, 255, 255, 0.32)',
     borderRadius: 100,
+    borderWidth: StyleSheet.hairlineWidth,
     height: '100%',
     justifyContent: 'center',
     width: '100%',
@@ -619,19 +666,18 @@ const styles = StyleSheet.create({
     right: 0,
   },
   scrollContent: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: 'column',
   },
   cardPressable: {
-    borderRadius: 36,
+    borderRadius: 24,
     shadowColor: '#206B99',
     shadowOffset: { height: 3, width: 0 },
     shadowOpacity: 0.3,
     shadowRadius: 10,
   },
   card: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 36,
+    backgroundColor: 'rgba(176, 191, 201, 0.3)',
+    borderRadius: 24,
     height: '100%',
     overflow: 'hidden',
     width: '100%',
@@ -641,12 +687,14 @@ const styles = StyleSheet.create({
     fontFamily: 'Yuanti SC',
     fontWeight: '700',
     position: 'absolute',
-    right: 8,
+    zIndex: 2,
   },
   rarityRow: {
     alignItems: 'center',
     flexDirection: 'row',
+    gap: 4,
     position: 'absolute',
+    zIndex: 2,
   },
   rarityLabel: {
     color: '#FFFFFF',
@@ -658,6 +706,7 @@ const styles = StyleSheet.create({
   },
   cardImage: {
     position: 'absolute',
+    zIndex: 1,
   },
   pressed: {
     opacity: 0.82,

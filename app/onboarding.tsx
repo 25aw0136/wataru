@@ -287,7 +287,7 @@ export default function Onboarding() {
       >
         <GlassView
           glassEffectStyle="regular"
-          tintColor="rgba(217, 217, 217, 0.2)"
+          tintColor="rgba(50, 107, 150, 0.32)"
           style={styles.glassButton}
           pointerEvents="none"
         >
@@ -416,8 +416,11 @@ const styles = StyleSheet.create({
   glassButton: {
     flex: 1,
     alignItems: 'center',
+    backgroundColor: 'rgba(50, 107, 150, 0.24)',
+    borderColor: 'rgba(255, 255, 255, 0.32)',
     justifyContent: 'center',
     borderRadius: 100,
+    borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
   },
   buttonText: {

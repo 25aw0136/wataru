@@ -3,7 +3,7 @@ import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, type Href } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useState, type ReactNode } from 'react';
 import {
   Platform,
   Pressable,
@@ -40,6 +40,8 @@ const FIGMA_WIDTH = 402;
 const FIGMA_HEIGHT = 874;
 const WAVE_WIDTH = 402;
 const WAVE_HEIGHT = 512;
+const DECORATIVE_DRIFT_LOOP = FIGMA_WIDTH;
+const DECORATIVE_DRIFT_SPEED = 0.0055;
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 
 function buildWavePath(phase: number, departureMode: number, baseY: number) {
@@ -220,12 +222,39 @@ function SideNoteGraphic(props: SvgProps) {
   );
 }
 
+function DecorativeDriftLayer({
+  drift,
+  renderItem,
+  speedMultiplier,
+}: {
+  drift: SharedValue<number>;
+  renderItem: () => ReactNode;
+  speedMultiplier: number;
+}) {
+  const animatedStyle = useAnimatedStyle(() => {
+    const distance = (drift.value * speedMultiplier) % DECORATIVE_DRIFT_LOOP;
+
+    return {
+      transform: [{ translateX: -distance }],
+    };
+  });
+
+  return (
+    <Animated.View pointerEvents="none" style={[styles.decorativeDriftLayer, animatedStyle]}>
+      <View style={styles.decorativeBand}>{renderItem()}</View>
+      <View style={[styles.decorativeBand, styles.decorativeBandRepeat]}>{renderItem()}</View>
+    </Animated.View>
+  );
+}
+
 export default function HomeScreen() {
   const colorScheme = useColorScheme();
   const [isSailing, setIsSailing] = useState(false);
   const [stageSize, setStageSize] = useState({ height: FIGMA_HEIGHT, width: FIGMA_WIDTH });
   const isNightMode = colorScheme === 'dark';
   const breezePhase = useSharedValue(0);
+  const decorativeDrift = useSharedValue(0);
+  const decorativeSpeed = useSharedValue(0);
   const departurePhase = useSharedValue(0);
   const shipMotion = useSharedValue(0);
   const noteVisibility = useSharedValue(0);
@@ -243,6 +272,7 @@ export default function HomeScreen() {
   useFrameCallback((frame) => {
     const elapsed = frame.timeSincePreviousFrame ?? 16.67;
     breezePhase.value += (Math.PI / 1000) * elapsed;
+    decorativeDrift.value += elapsed * DECORATIVE_DRIFT_SPEED * decorativeSpeed.value;
     shipMotion.value += (Math.PI / 1800) * elapsed;
 
     if (breezePhase.value > Math.PI * 2000) {
@@ -280,13 +310,13 @@ export default function HomeScreen() {
 
   const sideNoteAnimatedStyle = useAnimatedStyle(() => {
     const visible = noteVisibility.value;
-    const sway = Math.sin(shipMotion.value * 1.25 + 0.4) * 3.2 * visible;
+    const sway = Math.sin(shipMotion.value * 1.25 + 0.4) * 5.4 * visible;
 
     return {
       opacity: visible,
       transform: [
         { translateY: (1 - visible) * 12 },
-        { translateX: Math.sin(shipMotion.value * 0.72) * 1.4 * visible },
+        { translateX: Math.sin(shipMotion.value * 0.72) * 3.2 * visible },
         { rotate: `${12.31 + sway}deg` },
       ],
     };
@@ -294,13 +324,13 @@ export default function HomeScreen() {
 
   const musicNoteAnimatedStyle = useAnimatedStyle(() => {
     const visible = noteVisibility.value;
-    const sway = Math.sin(shipMotion.value * 1.45 + 1.1) * 4.2 * visible;
+    const sway = Math.sin(shipMotion.value * 1.45 + 1.1) * 7.2 * visible;
 
     return {
       opacity: visible,
       transform: [
         { translateY: (1 - visible) * 12 },
-        { translateX: Math.sin(shipMotion.value * 0.86 + 0.7) * 1.2 * visible },
+        { translateX: Math.sin(shipMotion.value * 0.86 + 0.7) * 3 * visible },
         { rotate: `${-6.83 + sway}deg` },
       ],
     };
@@ -325,6 +355,10 @@ export default function HomeScreen() {
         duration: 1800,
         easing: Easing.inOut(Easing.cubic),
       });
+      decorativeSpeed.value = withTiming(next ? 1 : 0, {
+        duration: next ? 1600 : 900,
+        easing: Easing.inOut(Easing.cubic),
+      });
       noteVisibility.value = withTiming(next ? 1 : 0, {
         duration: next ? 650 : 260,
         easing: Easing.out(Easing.cubic),
@@ -344,7 +378,7 @@ export default function HomeScreen() {
 
       return next;
     });
-  }, [noteVisibility, statusVisibility, surge]);
+  }, [decorativeSpeed, noteVisibility, statusVisibility, surge]);
 
   return (
     <LinearGradient
@@ -373,7 +407,7 @@ export default function HomeScreen() {
             style={({ pressed }) => [styles.topActionHitArea, pressed && styles.buttonPressed]}>
             <GlassView
               glassEffectStyle="regular"
-              tintColor="rgba(217, 217, 217, 0.2)"
+              tintColor="rgba(50, 107, 150, 0.32)"
               style={[styles.topAction, isNightMode && styles.nightGlassShadow]}>
               <DiplomaGraphic style={styles.diplomaIcon} />
             </GlassView>
@@ -381,20 +415,50 @@ export default function HomeScreen() {
           {isNightMode ? (
             <>
               <Image contentFit="contain" source={moonImage} style={styles.moon} />
-              <StarGraphic style={styles.starOne} />
-              <StarGraphic style={styles.starTwo} />
-              <StarGraphic style={styles.starThree} />
-              <StarGraphic style={styles.starFour} />
-              <StarGraphic style={styles.starFive} />
-              <StarGraphic style={styles.starSix} />
-              <StarGraphic style={styles.starSeven} />
+              <DecorativeDriftLayer
+                drift={decorativeDrift}
+                speedMultiplier={0.38}
+                renderItem={() => <StarGraphic style={styles.starOne} />}
+              />
+              <DecorativeDriftLayer
+                drift={decorativeDrift}
+                speedMultiplier={0.68}
+                renderItem={() => <StarGraphic style={styles.starTwo} />}
+              />
+              <DecorativeDriftLayer
+                drift={decorativeDrift}
+                speedMultiplier={0.94}
+                renderItem={() => <StarGraphic style={styles.starThree} />}
+              />
+              <DecorativeDriftLayer
+                drift={decorativeDrift}
+                speedMultiplier={1.24}
+                renderItem={() => <StarGraphic style={styles.starFour} />}
+              />
+              <DecorativeDriftLayer
+                drift={decorativeDrift}
+                speedMultiplier={2.12}
+                renderItem={() => <StarGraphic style={styles.starSeven} />}
+              />
             </>
           ) : (
             <>
               <Image contentFit="fill" source={sunImage} style={styles.sun} />
-              <BirdSmallGraphic style={styles.leftSmallBird} />
-              <BirdSmallGraphic style={styles.rightSmallBird} />
-              <BirdLargeGraphic style={styles.leftLargeBird} />
+              <DecorativeDriftLayer
+                drift={decorativeDrift}
+                speedMultiplier={0.55}
+                renderItem={() => <BirdSmallGraphic style={styles.leftSmallBird} />}
+              />
+              <DecorativeDriftLayer
+                drift={decorativeDrift}
+                speedMultiplier={1.25}
+                renderItem={() => <BirdSmallGraphic style={styles.rightSmallBird} />}
+              />
+              <DecorativeDriftLayer
+                drift={decorativeDrift}
+                speedMultiplier={1.8}
+                renderItem={() => <BirdLargeGraphic style={styles.leftLargeBird} />}
+              />
             </>
           )}
           <Animated.View style={[styles.ship, shipAnimatedStyle]}>
@@ -427,7 +491,7 @@ export default function HomeScreen() {
             ]}>
             <GlassView
               glassEffectStyle="regular"
-              tintColor="rgba(217, 217, 217, 0.2)"
+              tintColor="rgba(50, 107, 150, 0.32)"
               isInteractive
               style={styles.glassButton}>
               <Text style={styles.buttonText}>{isSailing ? '入港する' : '出航する'}</Text>
@@ -469,7 +533,9 @@ const styles = StyleSheet.create({
   },
   topAction: {
     alignItems: 'center',
-    backgroundColor: 'rgba(217, 217, 217, 0.2)',
+    backgroundColor: 'rgba(50, 107, 150, 0.24)',
+    borderColor: 'rgba(255, 255, 255, 0.32)',
+    borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 100,
     height: '100%',
     justifyContent: 'center',
@@ -486,33 +552,52 @@ const styles = StyleSheet.create({
     height: 35,
     width: 35,
   },
+  decorativeDriftLayer: {
+    height: FIGMA_HEIGHT,
+    left: 0,
+    overflow: 'visible',
+    position: 'absolute',
+    top: 0,
+    width: FIGMA_WIDTH * 2,
+    zIndex: 0,
+  },
+  decorativeBand: {
+    height: FIGMA_HEIGHT,
+    left: 0,
+    position: 'absolute',
+    top: 0,
+    width: FIGMA_WIDTH,
+  },
+  decorativeBandRepeat: {
+    left: FIGMA_WIDTH,
+  },
   sun: {
     height: 30,
     left: 40,
     position: 'absolute',
     top: 174,
     width: 30,
-    zIndex: 2,
+    zIndex: 0,
   },
   leftSmallBird: {
     height: 14,
-    left: 40,
+    left: 24,
     position: 'absolute',
-    top: 269,
+    top: 277,
     width: 23,
     zIndex: 2,
   },
   rightSmallBird: {
     height: 14,
-    left: 339,
+    left: 352,
     position: 'absolute',
-    top: 269,
+    top: 257,
     width: 23,
     zIndex: 2,
   },
   leftLargeBird: {
     height: 18,
-    left: 73,
+    left: 160,
     position: 'absolute',
     top: 251,
     width: 31,
@@ -525,7 +610,7 @@ const styles = StyleSheet.create({
     top: 193,
     transform: [{ rotate: '163.8deg' }, { scaleY: -1 }],
     width: 30,
-    zIndex: 2,
+    zIndex: 0,
   },
   starOne: {
     height: 20,
@@ -561,24 +646,6 @@ const styles = StyleSheet.create({
     top: 240,
     transform: [{ rotate: '18.83deg' }],
     width: 23,
-    zIndex: 2,
-  },
-  starFive: {
-    height: 23,
-    left: 46,
-    position: 'absolute',
-    top: 337,
-    transform: [{ rotate: '18.83deg' }],
-    width: 23,
-    zIndex: 2,
-  },
-  starSix: {
-    height: 20,
-    left: 325,
-    position: 'absolute',
-    top: 315,
-    transform: [{ rotate: '18.83deg' }],
-    width: 20,
     zIndex: 2,
   },
   starSeven: {
@@ -661,8 +728,8 @@ const styles = StyleSheet.create({
   },
   glassButton: {
     alignItems: 'center',
-    backgroundColor: 'rgba(217, 217, 217, 0.2)',
-    borderColor: 'rgba(255, 255, 255, 0.45)',
+    backgroundColor: 'rgba(50, 107, 150, 0.24)',
+    borderColor: 'rgba(255, 255, 255, 0.32)',
     borderRadius: 100,
     borderWidth: StyleSheet.hairlineWidth,
     height: '100%',
