@@ -1,9 +1,10 @@
+import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { GlassView } from 'expo-glass-effect';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, type Href } from 'expo-router';
-import { useCallback, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   Platform,
   Pressable,
@@ -35,6 +36,8 @@ import Svg, {
 
 const sunImage = require('@/assets/figma/sun.png') as ImageSourcePropType;
 const moonImage = require('@/assets/figma/night-moon.png') as ImageSourcePropType;
+const oceanAudio = require('@/assets/audio/ocean-loop.wav');
+const sailingAudio = require('@/assets/audio/sailing-loop.wav');
 
 const FIGMA_WIDTH = 402;
 const FIGMA_HEIGHT = 874;
@@ -42,7 +45,14 @@ const WAVE_WIDTH = 402;
 const WAVE_HEIGHT = 512;
 const DECORATIVE_DRIFT_LOOP = FIGMA_WIDTH;
 const DECORATIVE_DRIFT_SPEED = 0.0055;
+const OCEAN_AUDIO_FADE_DURATION_MS = 3000;
+const OCEAN_AUDIO_MODE_CROSSFADE_DURATION_MS = 1200;
+const OCEAN_AUDIO_CROSSFADE_DURATION_MS = 2500;
+const OCEAN_AUDIO_FADE_INTERVAL_MS = 100;
+const IDLE_OCEAN_AUDIO_TARGET_VOLUME = 0.28;
+const SAILING_OCEAN_AUDIO_TARGET_VOLUME = 1;
 const AnimatedPath = Animated.createAnimatedComponent(Path);
+type OceanAudioMode = 'idle' | 'sailing';
 
 function buildWavePath(phase: number, departureMode: number, baseY: number) {
   'worklet';
@@ -249,6 +259,20 @@ function DecorativeDriftLayer({
 
 export default function HomeScreen() {
   const colorScheme = useColorScheme();
+  const primaryIdleOceanAudioPlayer = useAudioPlayer(oceanAudio);
+  const secondaryIdleOceanAudioPlayer = useAudioPlayer(oceanAudio);
+  const primarySailingOceanAudioPlayer = useAudioPlayer(sailingAudio);
+  const secondarySailingOceanAudioPlayer = useAudioPlayer(sailingAudio);
+  const primaryIdleOceanAudioStatus = useAudioPlayerStatus(primaryIdleOceanAudioPlayer);
+  const primarySailingOceanAudioStatus = useAudioPlayerStatus(primarySailingOceanAudioPlayer);
+  const activeOceanAudioMode = useRef<OceanAudioMode>('idle');
+  const activeOceanAudioPlayerIndexes = useRef<Record<OceanAudioMode, number>>({
+    idle: 0,
+    sailing: 0,
+  });
+  const fadeTimers = useRef<ReturnType<typeof setInterval>[]>([]);
+  const loopTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const isOceanAudioMounted = useRef(false);
   const [isSailing, setIsSailing] = useState(false);
   const [stageSize, setStageSize] = useState({ height: FIGMA_HEIGHT, width: FIGMA_WIDTH });
   const isNightMode = colorScheme === 'dark';
@@ -260,6 +284,253 @@ export default function HomeScreen() {
   const noteVisibility = useSharedValue(0);
   const statusVisibility = useSharedValue(0);
   const surge = useSharedValue(0);
+
+  const getOceanAudioPlayers = useCallback(
+    (mode: OceanAudioMode) =>
+      mode === 'idle'
+        ? [primaryIdleOceanAudioPlayer, secondaryIdleOceanAudioPlayer]
+        : [primarySailingOceanAudioPlayer, secondarySailingOceanAudioPlayer],
+    [
+      primaryIdleOceanAudioPlayer,
+      primarySailingOceanAudioPlayer,
+      secondaryIdleOceanAudioPlayer,
+      secondarySailingOceanAudioPlayer,
+    ]
+  );
+
+  const getOceanAudioDuration = useCallback(
+    (mode: OceanAudioMode) =>
+      mode === 'idle'
+        ? primaryIdleOceanAudioStatus.duration
+        : primarySailingOceanAudioStatus.duration,
+    [primaryIdleOceanAudioStatus.duration, primarySailingOceanAudioStatus.duration]
+  );
+
+  const getOceanAudioVolume = useCallback(
+    (mode: OceanAudioMode) =>
+      mode === 'idle' ? IDLE_OCEAN_AUDIO_TARGET_VOLUME : SAILING_OCEAN_AUDIO_TARGET_VOLUME,
+    []
+  );
+
+  const clearOceanAudioTimers = useCallback(() => {
+    if (loopTimer.current) {
+      clearTimeout(loopTimer.current);
+      loopTimer.current = undefined;
+    }
+
+    fadeTimers.current.forEach((timer) => clearInterval(timer));
+    fadeTimers.current = [];
+  }, []);
+
+  const fadePlayerVolume = useCallback(
+    (
+      player: typeof primaryIdleOceanAudioPlayer,
+      fromVolume: number,
+      toVolume: number,
+      duration: number,
+      onComplete?: () => void
+    ) => {
+      const fadeSteps = Math.ceil(duration / OCEAN_AUDIO_FADE_INTERVAL_MS);
+      let currentStep = 0;
+
+      player.volume = fromVolume;
+
+      const fadeTimer = setInterval(() => {
+        if (!isOceanAudioMounted.current) {
+          clearInterval(fadeTimer);
+          return;
+        }
+
+        currentStep += 1;
+
+        const progress = Math.min(1, currentStep / fadeSteps);
+        player.volume = fromVolume + (toVolume - fromVolume) * progress;
+
+        if (progress >= 1) {
+          clearInterval(fadeTimer);
+          onComplete?.();
+        }
+      }, OCEAN_AUDIO_FADE_INTERVAL_MS);
+
+      fadeTimers.current.push(fadeTimer);
+    },
+    []
+  );
+
+  const stopOceanAudioMode = useCallback(
+    (mode: OceanAudioMode) => {
+      getOceanAudioPlayers(mode).forEach((player) => {
+        player.pause();
+        player.volume = 0;
+        void player.seekTo(0).catch(() => {});
+      });
+    },
+    [getOceanAudioPlayers]
+  );
+
+  const scheduleNextOceanAudioLoop = useCallback(
+    (mode: OceanAudioMode) => {
+      const duration = getOceanAudioDuration(mode);
+
+      if (!duration) {
+        return;
+      }
+
+      const waitBeforeCrossfade = Math.max(
+        0,
+        duration * 1000 - OCEAN_AUDIO_CROSSFADE_DURATION_MS
+      );
+
+      loopTimer.current = setTimeout(() => {
+        if (!isOceanAudioMounted.current || activeOceanAudioMode.current !== mode) {
+          return;
+        }
+
+        const modePlayers = getOceanAudioPlayers(mode);
+        const currentPlayer = modePlayers[activeOceanAudioPlayerIndexes.current[mode]];
+        const nextPlayer = modePlayers[1 - activeOceanAudioPlayerIndexes.current[mode]];
+        const targetVolume = getOceanAudioVolume(mode);
+
+        void nextPlayer.seekTo(0).finally(() => {
+          if (!isOceanAudioMounted.current || activeOceanAudioMode.current !== mode) {
+            return;
+          }
+
+          nextPlayer.volume = 0;
+          nextPlayer.play();
+
+          fadePlayerVolume(
+            currentPlayer,
+            targetVolume,
+            0,
+            OCEAN_AUDIO_CROSSFADE_DURATION_MS,
+            () => {
+              currentPlayer.pause();
+              currentPlayer.volume = 0;
+              void currentPlayer.seekTo(0).catch(() => {});
+            }
+          );
+          fadePlayerVolume(
+            nextPlayer,
+            0,
+            targetVolume,
+            OCEAN_AUDIO_CROSSFADE_DURATION_MS,
+            () => {
+              activeOceanAudioPlayerIndexes.current[mode] =
+                1 - activeOceanAudioPlayerIndexes.current[mode];
+              scheduleNextOceanAudioLoop(mode);
+            }
+          );
+        });
+      }, waitBeforeCrossfade);
+    },
+    [fadePlayerVolume, getOceanAudioDuration, getOceanAudioPlayers, getOceanAudioVolume]
+  );
+
+  const startOceanAudioMode = useCallback(
+    async (mode: OceanAudioMode, fadeDuration: number) => {
+      const modePlayers = getOceanAudioPlayers(mode);
+      const activePlayer = modePlayers[0];
+      const targetVolume = getOceanAudioVolume(mode);
+
+      activeOceanAudioMode.current = mode;
+      activeOceanAudioPlayerIndexes.current[mode] = 0;
+
+      modePlayers.forEach((player) => {
+        player.loop = false;
+        player.volume = 0;
+        player.pause();
+      });
+
+      await activePlayer.seekTo(0);
+
+      if (!isOceanAudioMounted.current || activeOceanAudioMode.current !== mode) {
+        return;
+      }
+
+      activePlayer.play();
+      fadePlayerVolume(activePlayer, 0, targetVolume, fadeDuration);
+      scheduleNextOceanAudioLoop(mode);
+    },
+    [fadePlayerVolume, getOceanAudioPlayers, getOceanAudioVolume, scheduleNextOceanAudioLoop]
+  );
+
+  const transitionOceanAudioMode = useCallback(
+    async (nextMode: OceanAudioMode) => {
+      if (!primaryIdleOceanAudioStatus.duration || !primarySailingOceanAudioStatus.duration) {
+        return;
+      }
+
+      const currentMode = activeOceanAudioMode.current;
+
+      if (currentMode === nextMode) {
+        return;
+      }
+
+      clearOceanAudioTimers();
+
+      const currentPlayers = getOceanAudioPlayers(currentMode);
+      const currentPlayer = currentPlayers[activeOceanAudioPlayerIndexes.current[currentMode]];
+
+      fadePlayerVolume(
+        currentPlayer,
+        currentPlayer.volume,
+        0,
+        OCEAN_AUDIO_MODE_CROSSFADE_DURATION_MS,
+        () => {
+          stopOceanAudioMode(currentMode);
+        }
+      );
+
+      await startOceanAudioMode(nextMode, OCEAN_AUDIO_MODE_CROSSFADE_DURATION_MS);
+    },
+    [
+      clearOceanAudioTimers,
+      fadePlayerVolume,
+      getOceanAudioPlayers,
+      primaryIdleOceanAudioStatus.duration,
+      primarySailingOceanAudioStatus.duration,
+      startOceanAudioMode,
+      stopOceanAudioMode,
+    ]
+  );
+
+  useEffect(() => {
+    if (!primaryIdleOceanAudioStatus.duration || !primarySailingOceanAudioStatus.duration) {
+      return;
+    }
+
+    isOceanAudioMounted.current = true;
+
+    async function startOceanAudio() {
+      try {
+        await setAudioModeAsync({
+          interruptionMode: 'mixWithOthers',
+          playsInSilentMode: true,
+        });
+
+        await startOceanAudioMode('idle', OCEAN_AUDIO_FADE_DURATION_MS);
+      } catch (error) {
+        console.warn('Failed to start ocean audio', error);
+      }
+    }
+
+    startOceanAudio();
+
+    return () => {
+      isOceanAudioMounted.current = false;
+      clearOceanAudioTimers();
+
+      stopOceanAudioMode('idle');
+      stopOceanAudioMode('sailing');
+    };
+  }, [
+    clearOceanAudioTimers,
+    primaryIdleOceanAudioStatus.duration,
+    primarySailingOceanAudioStatus.duration,
+    startOceanAudioMode,
+    stopOceanAudioMode,
+  ]);
 
   const handleStageLayout = useCallback((event: LayoutChangeEvent) => {
     const { height, width } = event.nativeEvent.layout;
@@ -346,10 +617,12 @@ export default function HomeScreen() {
   });
 
   const toggleSailingMode = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
     setIsSailing((current) => {
       const next = !current;
+
+      void transitionOceanAudioMode(next ? 'sailing' : 'idle');
 
       surge.value = withTiming(next ? 1 : 0, {
         duration: 1800,
@@ -378,7 +651,7 @@ export default function HomeScreen() {
 
       return next;
     });
-  }, [decorativeSpeed, noteVisibility, statusVisibility, surge]);
+  }, [decorativeSpeed, noteVisibility, statusVisibility, surge, transitionOceanAudioMode]);
 
   return (
     <LinearGradient
